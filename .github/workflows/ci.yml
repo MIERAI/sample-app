@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -15,7 +16,7 @@ jobs:
         with: { go-version-file: go.mod }
       - run: go vet ./... && go test -race ./...
   image:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs: test
     permissions: { contents: read, packages: write, id-token: write }
     uses: MIERAI/gitops-platform-blueprint/.github/workflows/build-image.yml@main
