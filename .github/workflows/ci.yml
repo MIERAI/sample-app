@@ -1,0 +1,30 @@
+# PR: 测试。main: 测试 → 镜像(共用模板)→ gitops-manifests 的 dev 更新 → Argo CD 同步
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod }
+      - run: go vet ./... && go test -race ./...
+  image:
+    if: github.event_name == 'push'
+    needs: test
+    permissions: { contents: read, packages: write, id-token: write }
+    uses: MIERAI/gitops-platform-blueprint/.github/workflows/build-image.yml@main
+    with: { image: sample-app, sign: true }
+  promote:
+    needs: image
+    uses: MIERAI/gitops-platform-blueprint/.github/workflows/promote-dev.yml@main
+    with:
+      app: sample-app
+      images: ghcr.io/mierai/sample-app=${{ needs.image.outputs.tag }}
+    secrets:
+      MANIFESTS_DEPLOY_KEY: ${{ secrets.MANIFESTS_DEPLOY_KEY }}

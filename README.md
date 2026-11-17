@@ -1,15 +1,20 @@
-# Standard Application Reference Architecture
+# sample-app
 
-> Parent Project: [Enterprise GitOps Platform Blueprint](../gitops-platform-blueprint)
+> Part of the [GitOps Platform Blueprint](https://github.com/MIERAI/gitops-platform-blueprint)
 
-## Overview
-This repository demonstrates the implementation of a high-performance microservice within the GitOps ecosystem. It includes the application source code, comprehensive test suites, and the CI pipeline configuration.
+The public reference application for the delivery flow: a minimal Go HTTP service.
 
-## Key Features
-- **Application Stack**: Built on Kotlin and Quarkus for cloud-native performance.
-- **Containerization**: Optimized multi-stage Docker builds for minimal image size.
-- **CI/CD Integration**: Automated pipeline that builds images, scans for vulnerabilities, and updates the `gitops-manifests` repository to trigger deployment.
+| Endpoint | |
+|---|---|
+| `GET /healthz` | `ok`; header `X-App-Version` = image version (used to confirm which version is serving) |
+| `GET /hello?name=x` | `{"message": "hello, x", "version": "…"}` |
 
----
-**Component**: Application Reference  
-**Status**: Reference Implementation
+## CI (`.github/workflows/ci.yml`)
+
+- Pull request: `go vet` + `go test -race`
+- main: test → **shared** `build-image` (GHCR, tag = commit, Trivy, SBOM, cosign signature) → **shared** `promote-dev`
+  (updates `gitops-manifests/sample-app/overlays/dev`) → Argo CD rolls it out
+
+```sh
+go test ./... && docker build -t sample-app . && docker run -p 8080:8080 sample-app
+```
