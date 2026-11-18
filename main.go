@@ -4,7 +4,11 @@
 //	GET /metrics      → Prometheus metrics (requests by route × code, latency histogram)
 //	GET /hello?name=x → {"message": "hello, x", "version": "…"} (lang=ja → "こんにちは、x")
 //
-// FAULT_HELLO=1 makes /hello fail with 500 (fault injection: demonstrates that a canary failing its analysis is aborted).
+// Fault injection (FAULT_HELLO), to show that the canary analysis aborts a bad release:
+//
+//	1          /hello fails with 500 (caught by the error-ratio analysis)
+//	contention /hello serializes on a global lock for 20ms: fine at low traffic, collapses under load
+//	           (caught only by the load test, not by the metrics of the synthetic traffic)
 package main
 
 import (
@@ -15,12 +19,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 )
 
-func newMux(version string, faultHello bool, m *metrics) *http.ServeMux {
+// contentionHold is how long FAULT_HELLO=contention holds the global lock per request.
+const contentionHold = 20 * time.Millisecond
+
+func newMux(version, fault string, m *metrics) *http.ServeMux {
 	mux := http.NewServeMux()
+	var global sync.Mutex
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		m.write(w)
@@ -30,9 +39,14 @@ func newMux(version string, faultHello bool, m *metrics) *http.ServeMux {
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("GET /hello", func(w http.ResponseWriter, r *http.Request) {
-		if faultHello {
+		switch fault {
+		case "1":
 			http.Error(w, "injected fault (FAULT_HELLO)", http.StatusInternalServerError)
 			return
+		case "contention":
+			global.Lock()
+			time.Sleep(contentionHold)
+			global.Unlock()
 		}
 		name := r.URL.Query().Get("name")
 		if name == "" {
@@ -57,7 +71,7 @@ func main() {
 	version := envOr("APP_VERSION", "dev")
 	srv := &http.Server{Addr: ":" + envOr("PORT", "8080"), Handler: func() http.Handler {
 		m := newMetrics()
-		return m.instrument(newMux(version, os.Getenv("FAULT_HELLO") == "1", m))
+		return m.instrument(newMux(version, os.Getenv("FAULT_HELLO"), m))
 	}(), ReadHeaderTimeout: 5 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

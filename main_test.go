@@ -3,11 +3,13 @@ package main
 import (
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestMux(t *testing.T) {
-	h := newMux("abc123", false, newMetrics())
+	h := newMux("abc123", "", newMetrics())
 	for _, c := range []struct {
 		path, wantBody string
 		wantCode       int
@@ -33,7 +35,7 @@ func TestMux(t *testing.T) {
 }
 
 func TestFaultHello(t *testing.T) {
-	h := newMux("abc123", true, newMetrics())
+	h := newMux("abc123", "1", newMetrics())
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/hello", nil))
 	if w.Code != 500 {
@@ -48,7 +50,7 @@ func TestFaultHello(t *testing.T) {
 
 func TestMetrics(t *testing.T) {
 	m := newMetrics()
-	h := m.instrument(newMux("v", true, m))
+	h := m.instrument(newMux("v", "1", m))
 	for _, p := range []string{"/hello", "/hello", "/healthz", "/nope"} {
 		h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", p, nil))
 	}
@@ -67,5 +69,29 @@ func TestMetrics(t *testing.T) {
 	}
 	if strings.Contains(out, "GET /metrics") {
 		t.Error("/metrics itself must not be counted")
+	}
+}
+
+// FAULT_HELLO=contention serializes requests: n concurrent requests take at least n × contentionHold,
+// while a single request still succeeds (the fault is invisible at low traffic).
+func TestHelloContention(t *testing.T) {
+	h := newMux("v", "contention", newMetrics())
+	const n = 5
+	start := time.Now()
+	var wg sync.WaitGroup
+	for range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest("GET", "/hello", nil))
+			if w.Code != 200 {
+				t.Errorf("/hello with contention: %d", w.Code)
+			}
+		}()
+	}
+	wg.Wait()
+	if d := time.Since(start); d < n*contentionHold {
+		t.Errorf("%d concurrent requests took %v, want ≥ %v (serialized)", n, d, n*contentionHold)
 	}
 }
