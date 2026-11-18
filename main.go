@@ -1,7 +1,7 @@
 // sample-app: GitOps 流水线的参照应用(最小的 HTTP 服务)。
 //
 //	GET /healthz      → ok(响应头 X-App-Version = 镜像的版本,部署后确认新版本已经在服务)
-//	GET /hello?name=x → {"message": "hello, x", "version": "…"}
+//	GET /hello?name=x → {"message": "hello, x", "version": "…"}(lang=ja → "こんにちは、x")
 package main
 
 import (
@@ -31,8 +31,12 @@ func newMux(version string) *http.ServeMux {
 			http.Error(w, "name too long", http.StatusBadRequest)
 			return
 		}
+		greeting := "hello, "
+		if r.URL.Query().Get("lang") == "ja" {
+			greeting = "こんにちは、"
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"message": "hello, " + name, "version": version})
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": greeting + name, "version": version})
 	})
 	return mux
 }
