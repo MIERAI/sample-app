@@ -55,7 +55,10 @@ func newMux(version string, faultHello bool, m *metrics) *http.ServeMux {
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	version := envOr("APP_VERSION", "dev")
-	srv := &http.Server{Addr: ":" + envOr("PORT", "8080"), Handler: func() http.Handler { m := newMetrics(); return m.instrument(newMux(version, os.Getenv("FAULT_HELLO") == "1", m)) }(), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: ":" + envOr("PORT", "8080"), Handler: func() http.Handler {
+		m := newMetrics()
+		return m.instrument(newMux(version, os.Getenv("FAULT_HELLO") == "1", m))
+	}(), ReadHeaderTimeout: 5 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() {
