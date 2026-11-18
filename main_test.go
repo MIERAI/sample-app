@@ -7,7 +7,7 @@ import (
 )
 
 func TestMux(t *testing.T) {
-	h := newMux("abc123")
+	h := newMux("abc123", false)
 	for _, c := range []struct {
 		path, wantBody string
 		wantCode       int
@@ -29,5 +29,19 @@ func TestMux(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/healthz", nil))
 	if v := w.Header().Get("X-App-Version"); v != "abc123" {
 		t.Errorf("version header = %q", v)
+	}
+}
+
+func TestFaultHello(t *testing.T) {
+	h := newMux("abc123", true)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/hello", nil))
+	if w.Code != 500 {
+		t.Errorf("/hello with FAULT_HELLO: %d", w.Code)
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/healthz", nil))
+	if w.Code != 200 {
+		t.Errorf("/healthz must stay healthy: %d", w.Code)
 	}
 }

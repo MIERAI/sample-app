@@ -1,7 +1,9 @@
 // sample-app: GitOps 流水线的参照应用(最小的 HTTP 服务)。
 //
 //	GET /healthz      → ok(响应头 X-App-Version = 镜像的版本,部署后确认新版本已经在服务)
-//	GET /hello?name=x → {"message": "hello, x", "version": "…"}(lang=ja → "こんにちは、x")
+//	GET /hello?name=x → {"message": "hello, x", "version": "…"} (lang=ja → "こんにちは、x")
+//
+// FAULT_HELLO=1 makes /hello fail with 500 (fault injection: demonstrates that a canary failing its analysis is aborted).
 package main
 
 import (
@@ -16,13 +18,17 @@ import (
 	"time"
 )
 
-func newMux(version string) *http.ServeMux {
+func newMux(version string, faultHello bool) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-App-Version", version)
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("GET /hello", func(w http.ResponseWriter, r *http.Request) {
+		if faultHello {
+			http.Error(w, "injected fault (FAULT_HELLO)", http.StatusInternalServerError)
+			return
+		}
 		name := r.URL.Query().Get("name")
 		if name == "" {
 			name = "world"
@@ -44,7 +50,7 @@ func newMux(version string) *http.ServeMux {
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	version := envOr("APP_VERSION", "dev")
-	srv := &http.Server{Addr: ":" + envOr("PORT", "8080"), Handler: newMux(version), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: ":" + envOr("PORT", "8080"), Handler: newMux(version, os.Getenv("FAULT_HELLO") == "1"), ReadHeaderTimeout: 5 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() {
