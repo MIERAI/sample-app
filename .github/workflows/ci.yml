@@ -28,6 +28,6 @@ jobs:
     uses: MIERAI/gitops-platform-blueprint/.github/workflows/promote-dev.yml@main
     with:
       app: sample-app
-      images: ghcr.io/mierai/sample-app=${{ needs.image.outputs.tag }}
+      images: ${{ needs.image.outputs.name }}=${{ needs.image.outputs.tag }}   # ghcr.io/<this repository's owner>/sample-app
     secrets:
       MANIFESTS_DEPLOY_KEY: ${{ secrets.MANIFESTS_DEPLOY_KEY }}
