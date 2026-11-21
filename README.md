@@ -1,8 +1,17 @@
 # sample-app
 
-> Part of the [GitOps Platform Blueprint](https://github.com/MIERAI/gitops-platform-blueprint)
+> Example application of [slo-platform](https://github.com/MIERAI/slo-platform) — its quickstart example, deployed by
+> [examples/sample-app](https://github.com/MIERAI/slo-platform/tree/main/examples/sample-app); principles and shared
+> CI: [GitOps Platform Blueprint](https://github.com/MIERAI/gitops-platform-blueprint)
 
-The public reference application for the delivery flow: a minimal Go HTTP service.
+The public reference application for the delivery flow: a minimal Go HTTP service. What it shows:
+
+- CI on every push to main: tests, a signed image (cosign, with SBOM and Trivy scan), promotion to dev
+- canary releases with Argo Rollouts (analysis: the canary's error ratio and p95 latency from Prometheus)
+- SLOs (availability, latency, probe) declared in slo-platform's
+  [examples/sample-app/app.yaml](https://github.com/MIERAI/slo-platform/blob/main/examples/sample-app/app.yaml)
+
+Run it locally: `go test ./... && go run .`, then `curl 'localhost:8080/hello?name=x'` (`PORT` changes the port).
 
 | Endpoint | |
 |---|---|
